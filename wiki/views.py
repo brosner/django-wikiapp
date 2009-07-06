@@ -66,15 +66,12 @@ def get_articles_for_object(object, article_qs=None):
     return article_qs.filter( content_type=get_ct(object),
                                        object_id=object.id)
 
-def get_url(urlname, group=None, args=None, kw=None):
+def get_url(urlname, group=None, args=None, kw=None, bridge=None):
     if group is None:
         return reverse(urlname, args=args)
     else:
-        app = group._meta.app_label
-        urlconf = '.'.join([app, 'urls'])
-        url = reverse(urlname, urlconf, kwargs=kw)
-        return ''.join(['/', app, url]) # @@@ harcoded: /app/.../
-
+        return bridge.reverse(urlname, group, kwargs=kw)
+        
 
 class ArticleEditLock(object):
     """ A soft lock to edting an article.
@@ -176,7 +173,7 @@ def article_list(request,
 @login_required
 def view_article(request, title,
                  ArticleClass=Article, # to create an unsaved instance
-                 group_slug=None, group_slug_field=None, group_qs=None,
+                 group_slug=None, bridge=None,
                  article_qs=ALL_ARTICLES,
                  template_name='view.html',
                  template_dir='wiki',
@@ -188,7 +185,10 @@ def view_article(request, title,
     if request.method == 'GET':
 
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             allow_read = has_read_perm(request.user, group, is_member,
                                        is_private)
             allow_write = has_write_perm(request.user, group, is_member)
@@ -229,7 +229,7 @@ def view_article(request, title,
 
 @login_required
 def edit_article(request, title,
-                 group_slug=None, group_slug_field=None, group_qs=None,
+                 group_slug=None, bridge=None,
                  article_qs=ALL_ARTICLES,
                  ArticleClass=Article, # to get the DoesNotExist exception
                  ArticleFormClass=ArticleForm,
@@ -242,7 +242,10 @@ def edit_article(request, title,
                  *args, **kw):
 
     if group_slug is not None:
-        group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+        try:
+            group = bridge.get_group(group_slug)
+        except ObjectDoesNotExist:
+            raise Http404
         allow_read = has_read_perm(request.user, group, is_member,
                                    is_private)
         allow_write = has_write_perm(request.user, group, is_member)
@@ -277,12 +280,11 @@ def edit_article(request, title,
                 form.group = group
 
             new_article, changeset = form.save()
-
-            url = get_url('wiki_article', group,
-                          [new_article.title],
-                          {'title': new_article.title,
-                           'group_slug': group_slug})
-
+            
+            url = get_url('wiki_article', group, kw={
+                'title': new_article.title,
+            }, bridge=bridge)
+            
             return redirect_to(request, url)
 
     elif request.method == 'GET':
@@ -295,7 +297,9 @@ def edit_article(request, title,
 
         initial = {'user_ip': user_ip}
         if group_slug is not None:
-            initial.update({'content_type': group_ct.id,
+            # @@@ wikiapp currently handles the group filtering, but we will
+            # eventually want to handle that via the bridge.
+            initial.update({'content_type': get_ct(group).id,
                             'object_id': group.id})
 
         if article is None:
@@ -321,7 +325,7 @@ def edit_article(request, title,
 
 @login_required
 def remove_article(request, title,
-                   group_slug=None, group_slug_field=None, group_qs=None,
+                   group_slug=None, bridge=None,
                    article_qs=ALL_ARTICLES,
                    template_name='confirm_remove.html',
                    template_dir='wiki',
@@ -334,7 +338,10 @@ def remove_article(request, title,
 
     if request.method == 'GET':
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
         else:
             group = None
         article = article_qs.get_by(title, group)
@@ -363,7 +370,7 @@ def remove_article(request, title,
 
 @login_required
 def view_changeset(request, title, revision,
-                   group_slug=None, group_slug_field=None, group_qs=None,
+                   group_slug=None, bridge=None,
                    article_qs=ALL_ARTICLES,
                    changes_qs=ALL_CHANGES,
                    template_name='changeset.html',
@@ -376,7 +383,11 @@ def view_changeset(request, title, revision,
     if request.method == "GET":
         article_args = {'article__title': title}
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
+            # @@@ hmm, need to look into this for the bridge i think
             article_args.update({'article__content_type': get_ct(group),
                                  'article__object_id': group.id})
             allow_read = has_read_perm(request.user, group, is_member,
@@ -413,7 +424,7 @@ def view_changeset(request, title, revision,
 
 @login_required
 def article_history(request, title,
-                    group_slug=None, group_slug_field=None, group_qs=None,
+                    group_slug=None, bridge=None,
                     article_qs=ALL_ARTICLES,
                     template_name='history.html',
                     template_dir='wiki',
@@ -426,7 +437,11 @@ def article_history(request, title,
 
         article_args = {'title': title}
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
+            # @@@ use bridge instead
             article_args.update({'content_type': get_ct(group),
                                  'object_id': group.id})
             allow_read = has_read_perm(request.user, group, is_member,
@@ -458,7 +473,7 @@ def article_history(request, title,
 
 @login_required
 def revert_to_revision(request, title,
-                       group_slug=None, group_slug_field=None, group_qs=None,
+                       group_slug=None, bridge=None,
                        article_qs=ALL_ARTICLES,
                        extra_context=None,
                        is_member=None,
@@ -473,7 +488,11 @@ def revert_to_revision(request, title,
 
         group = None
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
+            # @@@ use bridge instead
             article_args.update({'content_type': get_ct(group),
                                  'object_id': group.id})
             allow_read = has_read_perm(request.user, group, is_member,
@@ -496,11 +515,11 @@ def revert_to_revision(request, title,
         if request.user.is_authenticated():
             request.user.message_set.create(
                 message=u"The article was reverted successfully.")
-
-        url = get_url('wiki_article_history', group,
-                      [title], {'title': title,
-                                'group_slug': group_slug})
-
+                
+        url = get_url('wiki_article_history', group, kw={
+            'title': title,
+        }, bridge=bridge)
+        
         return redirect_to(request, url)
 
     return HttpResponseNotAllowed(['POST'])
@@ -508,7 +527,7 @@ def revert_to_revision(request, title,
 
 @login_required
 def search_article(request,
-                   group_slug=None, group_slug_field=None, group_qs=None,
+                   group_slug=None, bridge=None,
                    article_qs=ALL_ARTICLES,
                    SearchFormClass=SearchForm,
                    extra_context=None,
@@ -522,8 +541,10 @@ def search_article(request,
 
             group = None
             if group_slug is not None:
-                group = get_object_or_404(group_qs,
-                                          **{group_slug_field: group_slug})
+                try:
+                    group = bridge.get_group(group_slug)
+                except ObjectDoesNotExist:
+                    raise Http404
                 allow_read = has_read_perm(request.user, group, is_member,
                                            is_private)
             else:
@@ -533,10 +554,10 @@ def search_article(request,
                 return HttpResponseForbidden()
 
             # go to article by title
-            url = get_url('wiki_article', group,
-                          [search_term], {'title': search_term,
-                                          'group_slug': group_slug})
-
+            url = get_url('wiki_article', group, kw={
+                'title': search_term,
+            }, bridge=bridge)
+            
             return redirect_to(request, url)
 
     return HttpResponseNotAllowed(['POST'])
@@ -544,7 +565,7 @@ def search_article(request,
 
 @login_required
 def history(request,
-            group_slug=None, group_slug_field=None, group_qs=None,
+            group_slug=None, bridge=None,
             article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES,
             template_name='recentchanges.html',
             template_dir='wiki',
@@ -553,8 +574,10 @@ def history(request,
 
     if request.method == 'GET':
         if  group_slug is not None:
-            group = get_object_or_404(group_qs,
-                                      **{group_slug_field : group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             changes_qs = changes_qs.filter(article__content_type=get_ct(group),
                                            article__object_id=group.id)
             allow_read = has_read_perm(request.user, group, is_member,
@@ -582,7 +605,7 @@ def history(request,
 
 @login_required
 def observe_article(request, title,
-                    group_slug=None, group_slug_field=None, group_qs=None,
+                    group_slug=None, bridge=None,
                     article_qs=ALL_ARTICLES,
                     template_name='recentchanges.html',
                     template_dir='wiki',
@@ -595,7 +618,10 @@ def observe_article(request, title,
         article_args = {'title': title}
         group = None
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             article_args.update({'content_type': get_ct(group),
                                  'object_id': group.id})
             allow_read = has_read_perm(request.user, group, is_member,
@@ -610,11 +636,11 @@ def observe_article(request, title,
 
         notification.observe(article, request.user,
                              'wiki_observed_article_changed')
-
-        url = get_url('wiki_article', group,
-                      [article.title], {'title': article.title,
-                                        'group_slug': group_slug})
-
+        
+        url = get_url('wiki_article', group, kw={
+            'title': article.title,
+        }, bridge=bridge)
+        
         return redirect_to(request, url)
 
     return HttpResponseNotAllowed(['POST'])
@@ -622,7 +648,7 @@ def observe_article(request, title,
 
 @login_required
 def stop_observing_article(request, title,
-                           group_slug=None, group_slug_field=None, group_qs=None,
+                           group_slug=None, bridge=None,
                            article_qs=ALL_ARTICLES,
                            template_name='recentchanges.html',
                            template_dir='wiki',
@@ -635,7 +661,10 @@ def stop_observing_article(request, title,
         article_args = {'title': title}
         group = None
         if group_slug is not None:
-            group = get_object_or_404(group_qs,**{group_slug_field: group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             article_args.update({'content_type': get_ct(group),
                                  'object_id': group.id})
             allow_read = has_read_perm(request.user, group, is_member,
@@ -649,17 +678,17 @@ def stop_observing_article(request, title,
         article = get_object_or_404(article_qs, **article_args)
 
         notification.stop_observing(article, request.user)
-
-        url = get_url('wiki_article', group,
-                      [article.title], {'title': article.title,
-                                        'group_slug': group_slug})
-
+        
+        url = get_url('wiki_article', group, kw={
+            'title': article.title,
+        }, bridge=bridge)
+        
         return redirect_to(request, url)
     return HttpResponseNotAllowed(['POST'])
 
 
 def article_history_feed(request, feedtype, title,
-                         group_slug=None, group_slug_field=None, group_qs=None,
+                         group_slug=None, bridge=None,
                          article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES,
                          extra_context=None,
                          is_member=None,
@@ -672,7 +701,7 @@ def article_history_feed(request, feedtype, title,
 
     try:
         feedgen = ArticleHistoryFeed(title, request,
-                                     group_slug, group_slug_field, group_qs,
+                                     group_slug, bridge,
                                      article_qs, changes_qs,
                                      extra_context,
                                      *args, **kw).get_feed(title)
@@ -685,7 +714,7 @@ def article_history_feed(request, feedtype, title,
 
 
 def history_feed(request, feedtype,
-                 group_slug=None, group_slug_field=None, group_qs=None,
+                 group_slug=None, bridge=None,
                  article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES,
                  extra_context=None,
                  is_member=None,
@@ -698,7 +727,7 @@ def history_feed(request, feedtype,
 
     try:
         feedgen = HistoryFeed(request,
-                              group_slug, group_slug_field, group_qs,
+                              group_slug, bridge,
                               article_qs, changes_qs,
                               extra_context,
                               *args, **kw).get_feed()

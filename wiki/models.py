@@ -88,11 +88,8 @@ class Article(models.Model):
         def get_by(self, title, group=None):
             if group is None:
                 return self.get(title=title)
-            group_ct = get_ct(group)
-            self.get(title=title,
-                     content_type=group_ct,
-                     object_id=group.id)
-
+            return group.get_related_objects(self.filter(title=title)).get()
+            
     class Meta:
         verbose_name = _(u'Article')
         verbose_name_plural = _(u'Articles')

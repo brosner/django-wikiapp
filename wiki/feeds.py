@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.utils.translation import ugettext_lazy as _
+from django.http import Http404
 from django.shortcuts import get_object_or_404, render_to_response
 from django.template import Context, Template
 from django.template.loader import get_template
@@ -21,7 +22,7 @@ class RssHistoryFeed(Feed):
     description = 'Recent changes in wiki'
 
     def __init__(self, request,
-                 group_slug=None, group_slug_field=None, group_qs=None, 
+                 group_slug=None, bridge=None,
                  article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES, 
                  extra_context=None, 
                  title_template = u'feeds/history_title.html', 
@@ -29,8 +30,10 @@ class RssHistoryFeed(Feed):
                  *args, **kw):
 
         if  group_slug is not None:
-            group = get_object_or_404(group_qs, 
-                                      **{group_slug_field : group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             self.changes_qs = changes_qs.filter(article__content_type=get_ct(group), 
                                                 article__object_id=group.id)
         else:
@@ -56,7 +59,7 @@ class AtomHistoryFeed(atom.Feed):
     feed_subtitle = 'Recent changes in wiki'
 
     def __init__(self, request,
-                 group_slug=None, group_slug_field=None, group_qs=None, 
+                 group_slug=None, bridge=None, 
                  article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES, 
                  extra_context=None, 
                  title_template = u'feeds/history_title.html', 
@@ -64,8 +67,10 @@ class AtomHistoryFeed(atom.Feed):
                  *args, **kw):
 
         if  group_slug is not None:
-            group = get_object_or_404(group_qs, 
-                                      **{group_slug_field : group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             self.changes_qs = changes_qs.filter(article__content_type=get_ct(group), 
                                                 article__object_id=group.id)
         else:
@@ -107,7 +112,7 @@ class AtomHistoryFeed(atom.Feed):
 class RssArticleHistoryFeed(Feed):
 
     def __init__(self, title, request, 
-                group_slug=None, group_slug_field=None, group_qs=None,
+                group_slug=None, bridge=None,
                 article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES,
                 extra_context=None,
                 title_template = u'feeds/history_title.html',
@@ -115,8 +120,10 @@ class RssArticleHistoryFeed(Feed):
                 *args, **kw):
 
         if  group_slug is not None:
-            group = get_object_or_404(group_qs,
-                                      **{group_slug_field : group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             self.article_qs = article_qs.filter(content_type=get_ct(group),
                                            object_id=group.id)
         else:
@@ -153,7 +160,7 @@ class RssArticleHistoryFeed(Feed):
 class AtomArticleHistoryFeed(atom.Feed):
     
     def __init__(self, title, request, 
-                group_slug=None, group_slug_field=None, group_qs=None,
+                group_slug=None, bridge=None,
                 article_qs=ALL_ARTICLES, changes_qs=ALL_CHANGES,
                 extra_context=None,
                 title_template = u'feeds/history_title.html',
@@ -161,8 +168,10 @@ class AtomArticleHistoryFeed(atom.Feed):
                 *args, **kw):
 
         if  group_slug is not None:
-            group = get_object_or_404(group_qs,
-                                      **{group_slug_field : group_slug})
+            try:
+                group = bridge.get_group(group_slug)
+            except ObjectDoesNotExist:
+                raise Http404
             self.article_qs = article_qs.filter(content_type=get_ct(group),
                                            object_id=group.id)
         else:
