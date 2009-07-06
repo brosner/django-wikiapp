@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.template import RequestContext
 from django.core.urlresolvers import reverse
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import (Http404, HttpResponseRedirect,
                          HttpResponseNotAllowed, HttpResponse, HttpResponseForbidden)
 from django.shortcuts import get_object_or_404, render_to_response
@@ -49,14 +50,14 @@ def get_real_ip(request):
         return request.META['HTTP_X_FORWARDED_FOR']
     return request.META['REMOTE_ADDR']
 
-def get_articles_by_group(article_qs, group_slug=None,
-                          group_slug_field=None, group_qs=None):
+def get_articles_by_group(article_qs, group_slug=None, bridge=None):
     group = None
     if group_slug is not None:
-        group = get_object_or_404(group_qs,
-                                  **{group_slug_field: group_slug})
-        article_qs = article_qs.filter(content_type=get_ct(group),
-                                       object_id=group.id)
+        try:
+            group = bridge.get_group(group_slug)
+        except ObjectDoesNotExist:
+            raise Http404
+        article_qs = group.get_related_objects(article_qs)
     return article_qs, group
 
 def get_articles_for_object(object, article_qs=None):
@@ -126,7 +127,7 @@ def has_write_perm(user, group, is_member):
 
 @login_required
 def article_list(request,
-                 group_slug=None, group_slug_field=None, group_qs=None,
+                 group_slug=None, bridge=None,
                  article_qs=ALL_ARTICLES,
                  ArticleClass=Article,
                  SearchFormClass=SearchForm,
@@ -139,8 +140,7 @@ def article_list(request,
     if request.method == 'GET':
 
         articles, group = get_articles_by_group(
-            article_qs, group_slug,
-            group_slug_field, group_qs)
+            article_qs, group_slug, bridge)
 
         allow_read = has_read_perm(request.user, group, is_member, is_private)
         allow_write = has_write_perm(request.user, group, is_member)
