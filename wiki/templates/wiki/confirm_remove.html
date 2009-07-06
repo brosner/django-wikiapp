@@ -1,0 +1,21 @@
+{% extends 'wiki/base.html' %}
+{% load i18n %}
+
+{% block title %}
+    {% trans "Remove article" %}
+{% endblock %}
+
+{% block content %}
+	<h1>{% trans "Confirm deletion" %}</h1>
+
+    You are about to remove the article "{{ article.title }}".
+
+	<form action="" method="post">
+
+		<div class="submit">
+			<input type="submit" value="{% trans "Confirm" %}" />
+		</div>
+
+	</form>
+{% endblock %}
+

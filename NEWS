@@ -1,0 +1,7 @@
+In development (since 0.1)
+--------------------------
+
+ - Added a view to remove articles.
+ - WikiApp now depends on template_utils.
+   The WIKI_MARKUP_CHOICES setting has changed --
+   See the 'Settings' section on docs/install.rst for details.

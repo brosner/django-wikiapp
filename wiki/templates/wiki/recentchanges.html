@@ -1,0 +1,38 @@
+{% extends 'wiki/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<h2>{% trans "Recent Changes" %}</h2>
+<table>
+    <tr class="tbheader">
+	  <th>{% trans "Action" %}</th>
+	  <th>{% trans "Title" %}</th>
+	  <th>{% trans "Date" %}</th>
+	  <th>{% trans "Editor" %}</th>
+	  <th>{% trans "Comment" %}</th>
+    </tr>
+    {% for change in changes %}
+    <tr class="{% cycle 'tbodd' 'tbeven' %}">
+        <td>
+            {% if change.old_title %}
+                <a href="{% url wiki_changeset change.article.title,change.revision %}"> Modified </a>
+            {% else %}
+                Added
+            {% endif %}
+        </td>
+        <td><a href="{% url wiki_article change.article.title %}">
+            {{ change.article.title }}</a>
+        </td>
+        <td>{{ change.modified|date:"H:i" }}</td>
+        <td>
+            {% if change.editor %}
+                {{ change.editor }}
+            {% else %}
+                {{ change.editor_ip }}
+            {% endif %}
+        </td>
+        <td>{{ change.comment }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
