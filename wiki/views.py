@@ -68,7 +68,8 @@ def get_articles_for_object(object, article_qs=None):
 
 def get_url(urlname, group=None, args=None, kw=None, bridge=None):
     if group is None:
-        return reverse(urlname, args=args)
+        # @@@ due to group support passing args isn't really needed
+        return reverse(urlname, args=args, kwargs=kw)
     else:
         return bridge.reverse(urlname, group, kwargs=kw)
         
